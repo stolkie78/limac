@@ -1,1 +1,1 @@
-# limac
+# vagrant-kvm
