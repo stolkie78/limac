@@ -1,0 +1,103 @@
+---
+- name: Install LAMP server on TigerLinux
+  hosts: testmachines
+  become: true
+  
+  vars:
+    mysql_root_password: "YourSecurePassword"  # Vervang met een sterk wachtwoord
+
+  tasks:
+    - name: Update and upgrade DNF packages
+      dnf:
+        name: "*"
+        state: latest
+        update_cache: yes
+
+    - name: Install Apache (httpd)
+      dnf:
+        name: httpd
+        state: present
+
+    - name: Start en enable Apache service
+      service:
+        name: httpd
+        state: started
+        enabled: true
+
+    - name: Install MariaDB (MySQL)
+      dnf:
+        name: mariadb-server
+        state: present
+
+    - name: Start en enable MariaDB service
+      service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Set MySQL root password
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        host_all: true
+        state: present
+
+    - name: Remove anonymous MySQL users
+      mysql_user:
+        name: ''
+        host_all: true
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Remove test database and access to it
+      mysql_db:
+        name: test
+        state: absent
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: Reload privilege tables
+      mysql_user:
+        name: root
+        password: "{{ mysql_root_password }}"
+        login_unix_socket: /var/lib/mysql/mysql.sock
+        host_all: true
+        state: present
+        priv: '*.*:ALL,GRANT'
+
+    - name: Install PHP and extensions
+      dnf:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - php
+        - php-mysqlnd
+        - php-fpm
+        - php-mbstring
+        - php-xml
+        - php-json
+
+    - name: Start and enable PHP-FPM service
+      service:
+        name: php-fpm
+        state: started
+        enabled: true
+
+    - name: Restart Apache
+      service:
+        name: httpd
+        state: restarted
+
+    - name: Ensure firewall is configured
+      firewalld:
+        service: "{{ item }}"
+        permanent: true
+        state: enabled
+      loop:
+        - http
+        - https
+
+    - name: Reload firewalld
+      command: firewall-cmd --reload

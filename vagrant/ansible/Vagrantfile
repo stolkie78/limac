@@ -1,0 +1,90 @@
+# Vagrantfile for TigerLinux 9 with Ansible on two machines using libvirt
+Vagrant.configure("2") do |config|
+
+  # Define the first VM: ansible
+  config.vm.define "ansible" do |ansible|
+    ansible.vm.box = "generic/rocky9" # Replace with TigerLinux box if available
+    ansible.vm.hostname = "ansible"
+    
+    # Private network configuration with fixed IP
+    ansible.vm.network "private_network", ip: "192.168.50.4"
+
+    # Shared folder configuration
+    ansible.vm.synced_folder "../../data", "/data", create: true
+
+    # VM resources
+    ansible.vm.provider "libvirt" do |libvirt|
+      libvirt.memory = 2048
+      libvirt.cpus = 2
+    end
+
+    # Install Ansible on ansible
+    ansible.vm.provision "shell", inline: <<-SHELL
+      sudo dnf install -y epel-release
+      sudo dnf install -y ansible
+    SHELL
+
+    # Update /etc/hosts with testmachine IP
+    ansible.vm.provision "shell", inline: <<-SHELL
+      echo "192.168.50.5 testmachine" | sudo tee -a /etc/hosts
+    SHELL
+
+    # Add testmachine to Ansible inventory
+    ansible.vm.provision "shell", inline: <<-SHELL
+      echo "[testmachines]" | sudo tee -a /etc/ansible/hosts
+      echo "testmachine ansible_host=192.168.50.5" | sudo tee -a /etc/ansible/hosts
+    SHELL
+     
+    # Setup ssh
+    ansible.vm.provision "shell", inline: <<-SHELL
+      cp /data/ssh/id_rsa /root/.ssh
+      chmod 700 /root/.ssh
+      chmod 400 /root/.ssh/id_rsa
+    SHELL
+
+    # Run Ansible playbook
+    ansible.vm.provision "ansible" do |ansible_playbook|
+      ansible_playbook.playbook = "/data/ansible/lamp.yaml"  # Pad naar je playbook
+    end
+
+  end
+
+  # Define the second VM: testmachine
+  config.vm.define "testmachine" do |testmachine|
+    testmachine.vm.box = "generic/rocky9" # Replace with TigerLinux box if available
+    testmachine.vm.hostname = "testmachine"
+
+    # Private network configuration with fixed IP
+    testmachine.vm.network "private_network", ip: "192.168.50.5"
+    
+    # Shared folder configuration
+    testmachine.vm.synced_folder "../../data", "/data", create: true
+
+    # VM resources
+    testmachine.vm.provider "libvirt" do |libvirt|
+      libvirt.memory = 2048
+      libvirt.cpus = 2
+    end
+
+    # Install Ansible on testmachine
+    testmachine.vm.provision "shell", inline: <<-SHELL
+      sudo dnf install -y epel-release
+      sudo dnf install -y ansible
+    SHELL
+
+    # Update /etc/hosts with ansible IP
+    testmachine.vm.provision "shell", inline: <<-SHELL
+      echo "192.168.50.4 ansible" | sudo tee -a /etc/hosts
+    SHELL
+    
+    # Setup ssh
+    testmachine.vm.provision "shell", inline: <<-SHELL
+      cp /data/ssh/id_rsa.pub /root/.ssh/authorized_keys
+      chmod 700 /root/.ssh
+      chmod 400 /root/.ssh/authorized_keys
+    SHELL
+
+  end
+
+
+endsudo rm -f /usr/share/keyrings/proxmox-archive-keyring.gpgsudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1140AF8F639E0C39

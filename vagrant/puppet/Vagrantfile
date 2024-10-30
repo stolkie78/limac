@@ -1,0 +1,71 @@
+VAGRANTFILE_API_VERSION = "2"
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+
+  # Puppet Master + Bolt VM configuratie
+  config.vm.define "puppet-master" do |master|
+    master.vm.box = "generic/rocky9"
+    master.vm.hostname = "puppet-master"
+
+    # Netwerk configuratie: gebruik privé netwerk voor communicatie tussen de machines
+    master.vm.network "private_network", ip: "192.168.56.10"
+
+    # VM-specificaties
+    master.vm.provider "virtualbox" do |vb|
+      vb.memory = "2048"
+      vb.cpus = 2
+    end
+
+    # Provisioneer de machine om Puppet 8 en Puppet Bolt te installeren
+    master.vm.provision "shell", inline: <<-SHELL
+      # Update packages
+      sudo dnf update -y
+
+      # Installeer de Puppet 8 repository
+      sudo dnf install -y https://yum.puppet.com/puppet8-release-el-9.noarch.rpm
+
+      # Installeer Puppet server en Bolt
+      sudo dnf install -y puppetserver puppet-bolt
+
+      # Start de Puppet server
+      sudo systemctl enable --now puppetserver
+
+      # Verifieer de installatie
+      puppet --version
+      bolt --version
+    SHELL
+
+    # Gedeelde map configureren (shared folder)
+    master.vm.synced_folder "./puppet-scripts", "/vagrant_data"
+  end
+
+  # Puppet Agent (testmachine) configuratie
+  config.vm.define "puppet-agent" do |agent|
+    agent.vm.box = "generic/rocky9"
+    agent.vm.hostname = "puppet-agent"
+
+    # Netwerk configuratie: zelfde subnet, andere IP
+    agent.vm.network "private_network", ip: "192.168.56.11"
+
+    # VM-specificaties
+    agent.vm.provider "virtualbox" do |vb|
+      vb.memory = "1024"
+      vb.cpus = 1
+    end
+
+    # Provisioneer de machine om de Puppet 8 agent te installeren
+    agent.vm.provision "shell", inline: <<-SHELL
+      # Update de packages
+      sudo dnf update -y
+
+      # Installeer de Puppet 8 repository
+      sudo dnf install -y https://yum.puppet.com/puppet8-release-el-9.noarch.rpm
+
+      # Installeer Puppet agent
+      sudo dnf install -y puppet
+
+      # Verifieer de installatie
+      puppet --version
+    SHELL
+  end
+end
